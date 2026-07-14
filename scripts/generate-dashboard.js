@@ -115,14 +115,17 @@ function fmtDate(iso) {
 }
 
 function buildHtml(project, stages) {
-  const totalEst = stages.reduce((s, x) => s + (x.estDays || 0), 0);
-  const doneDays = stages
-    .filter((x) => x.status === "Done")
-    .reduce((s, x) => s + (x.estDays || 0), 0);
-  const inProgDays = stages
-    .filter((x) => x.status === "In Progress")
-    .reduce((s, x) => s + (x.estDays || 0), 0);
-  const overallPct = totalEst > 0 ? Math.round(((doneDays + inProgDays * 0.5) / totalEst) * 100) : 0;
+  // Each stage is worth an equal slice of the total (100 / number of stages).
+  // Done = full slice, In Progress = half its slice, Not Started = 0.
+  const numStages = stages.length || 1;
+  const sliceValue = 100 / numStages;
+  const overallPct = Math.round(
+    stages.reduce((sum, x) => {
+      if (x.status === "Done") return sum + sliceValue;
+      if (x.status === "In Progress") return sum + sliceValue * 0.5;
+      return sum;
+    }, 0)
+  );
 
   const stageCards = stages
     .map((s) => {
