@@ -3,7 +3,7 @@
 // and writes a fresh index.html with progress bars, dates, and notes.
 //
 // You never edit this file day-to-day. You only ever touch your
-// GitHub Project table + issue descriptions. This script does the rest.
+// GitHub Project table + your daily comments on each issue. This script does the rest.
 
 const fs = require("fs");
 
@@ -29,6 +29,12 @@ query($owner: String!, $number: Int!) {
               title
               number
               body
+              comments(last: 10) {
+                nodes {
+                  body
+                  createdAt
+                }
+              }
             }
             ... on DraftIssue {
               title
@@ -115,14 +121,17 @@ function fmtDate(iso) {
 }
 
 function buildHtml(project, stages) {
-  const totalEst = stages.reduce((s, x) => s + (x.estDays || 0), 0);
-  const doneDays = stages
-    .filter((x) => x.status === "Done")
-    .reduce((s, x) => s + (x.estDays || 0), 0);
-  const inProgDays = stages
-    .filter((x) => x.status === "In Progress")
-    .reduce((s, x) => s + (x.estDays || 0), 0);
-  const overallPct = totalEst > 0 ? Math.round(((doneDays + inProgDays * 0.5) / totalEst) * 100) : 0;
+  // Each stage is worth an equal slice of the total (100 / number of stages).
+  // Done = full slice, In Progress = half its slice, Not Started = 0.
+  const numStages = stages.length || 1;
+  const sliceValue = 100 / numStages;
+  const overallPct = Math.round(
+    stages.reduce((sum, x) => {
+      if (x.status === "Done") return sum + sliceValue;
+      if (x.status === "In Progress") return sum + sliceValue * 0.5;
+      return sum;
+    }, 0)
+  );
 
   const stageCards = stages
     .map((s) => {
@@ -208,10 +217,22 @@ async function main() {
     .filter((item) => item.content && item.content.title)
     .map((item) => {
       const f = extractFields(item);
+      const comments = (item.content.comments && item.content.comments.nodes) || [];
+      const commentNotes = comments
+        .slice()
+        .reverse()
+        .map((c) => {
+          const d = new Date(c.createdAt);
+          const dateStr = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+          return `<strong>${dateStr}:</strong> ${c.body}`;
+        })
+        .join("\n\n");
+      const notes = commentNotes || item.content.body;
+
       return {
         number: item.content.number || 999,
         title: item.content.title,
-        notes: item.content.body,
+        notes,
         status: f["Status"] || "Not Started",
         estDays: f["Est. Days"],
         startDate: f["Start Date"],
