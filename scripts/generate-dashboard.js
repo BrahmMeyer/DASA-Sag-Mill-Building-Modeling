@@ -3,7 +3,7 @@
 // and writes a fresh index.html with progress bars, dates, and notes.
 //
 // You never edit this file day-to-day. You only ever touch your
-// GitHub Project table + your daily comments on each issue. This script does the rest.
+// GitHub Project table + issue descriptions. This script does the rest.
 
 const fs = require("fs");
 
@@ -29,12 +29,6 @@ query($owner: String!, $number: Int!) {
               title
               number
               body
-              comments(last: 10) {
-                nodes {
-                  body
-                  createdAt
-                }
-              }
             }
             ... on DraftIssue {
               title
@@ -121,17 +115,14 @@ function fmtDate(iso) {
 }
 
 function buildHtml(project, stages) {
-  // Each stage is worth an equal slice of the total (100 / number of stages).
-  // Done = full slice, In Progress = half its slice, Not Started = 0.
-  const numStages = stages.length || 1;
-  const sliceValue = 100 / numStages;
-  const overallPct = Math.round(
-    stages.reduce((sum, x) => {
-      if (x.status === "Done") return sum + sliceValue;
-      if (x.status === "In Progress") return sum + sliceValue * 0.5;
-      return sum;
-    }, 0)
-  );
+  const totalEst = stages.reduce((s, x) => s + (x.estDays || 0), 0);
+  const doneDays = stages
+    .filter((x) => x.status === "Done")
+    .reduce((s, x) => s + (x.estDays || 0), 0);
+  const inProgDays = stages
+    .filter((x) => x.status === "In Progress")
+    .reduce((s, x) => s + (x.estDays || 0), 0);
+  const overallPct = totalEst > 0 ? Math.round(((doneDays + inProgDays * 0.5) / totalEst) * 100) : 0;
 
   const stageCards = stages
     .map((s) => {
@@ -188,4 +179,54 @@ function buildHtml(project, stages) {
         .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;
             margin-bottom: 20px; background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); }
         .meta-item { display: flex; flex-direction: column; }
-        .meta-label { font-size: 12px; text-transform: uppercase;
+        .meta-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
+        .meta-value { font-size: 15px; font-weight: 500; color: #1a202c; }
+        .comments-block { background: #fffaf0; border-left: 4px solid var(--orange); padding: 12px 16px; border-radius: 0 8px 8px 0; }
+        .comments-block p { margin: 0; font-size: 14px; line-height: 1.5; color: #4a5568; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>${project.title}</h1>
+            <div class="overall-progress-container">
+                <div class="overall-progress-bar" style="width: ${overallPct}%;"></div>
+            </div>
+            <span class="overall-text">Total Project Progress: ${overallPct}% Complete</span>
+            <div class="updated-text">Last updated: ${new Date().toUTCString()} (auto-refreshes every 30 min)</div>
+        </header>
+        ${stageCards}
+    </div>
+</body>
+</html>`;
+}
+
+async function main() {
+  const project = await fetchProjectData();
+
+  const stages = project.items.nodes
+    .filter((item) => item.content && item.content.title)
+    .map((item) => {
+      const f = extractFields(item);
+      return {
+        number: item.content.number || 999,
+        title: item.content.title,
+        notes: item.content.body,
+        status: f["Status"] || "Not Started",
+        estDays: f["Est. Days"],
+        startDate: f["Start Date"],
+        endDate: f["End Date"],
+        daysSpent: f["Days Spent"],
+      };
+    })
+    .sort((a, b) => a.number - b.number);
+
+  const html = buildHtml(project, stages);
+  fs.writeFileSync("index.html", html);
+  console.log(`Wrote index.html with ${stages.length} stages.`);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
