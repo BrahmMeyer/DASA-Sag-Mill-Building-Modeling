@@ -1,0 +1,42 @@
+name: Daily Progress Report
+description: Fill this form out daily to update the dashboard.
+body:
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Select Project Stage
+      options:
+        1. Conversion of 2D Floor Drawings to 3D Model
+        2. Insertion of uprights, braces, handrailing and stairs
+        3. Creation and Insertion of Equipment
+        4. Conversion of P&IDS for Pipe Routing, Electrical Routing and Cable Trays
+        5. Tied In to Conveyors and Output Equipment
+    validations:
+      required: true
+  - type: dropdown
+    id: status
+    attributes:
+      label: Status Color
+      options:
+        - 🔴 Not Started
+        - 🟡 In Progress
+        - 🟢 Done
+    validations:
+      required: true
+  - type: input
+    id: est_days
+    attributes:
+      label: Estimated Days Needed
+  - type: input
+    id: start_date
+    attributes:
+      label: Start Date (DD-MM-YYYY)
+  - type: input
+    id: end_date
+    attributes:
+      label: End Date (DD-MM-YYYY)
+  - type: textarea
+    id: comments
+    attributes:
+      label: Daily Comments & Issues Encountered
+      placeholder: Type blockers or progress notes here...
